@@ -56,10 +56,9 @@ nav button:hover {
   border-radius: 8px;
   overflow: hidden;
   background: #e0e0e0;
-  /* Properti baru untuk rasio aspek tetap */
+  /* Properti untuk rasio aspek tetap (default 4:3 untuk desktop) */
   height: 0;
   padding-bottom: 75%; /* Rasio aspek 4:3 (tinggi adalah 75% dari lebar) */
-  /* min-height dihapus karena padding-bottom sekarang mengatur tinggi relatif terhadap lebar */
 }
 #map {
   position: absolute; /* Pastikan posisi absolut di dalam kontainer relatif */
@@ -201,7 +200,8 @@ tbody tr:hover { background-color: #eef7ff; }
   #mapContainer {
     width: 100%; /* Peta ambil lebar penuh */
     margin-bottom: 1rem; /* Tambah jarak antar peta dan panel data */
-    /* Properti rasio aspek sudah diatur secara global, tidak perlu diubah lagi di sini */
+    /* Override padding-bottom untuk mobile agar lebih pendek (rasio 16:9) */
+    padding-bottom: 56.25%; /* Rasio aspek 16:9 (tinggi 56.25% dari lebar) */
   }
   /* #map dan #mapOverlayImage juga sudah diatur secara global */
 
