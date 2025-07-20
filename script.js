@@ -231,7 +231,10 @@ function showPage(id) {
   }
   // When switching back to home, make sure map is invalidated
   if (id === "home") {
-      map.invalidateSize(); // Ensures Leaflet map renders correctly after display:none
+      // Menambahkan setTimeout untuk memberikan waktu bagi DOM untuk merender
+      setTimeout(() => {
+          map.invalidateSize();
+      }, 100); // Penundaan 100 milidetik
   }
 }
 
@@ -333,6 +336,7 @@ document.getElementById("downloadAllDataCsvBtn").onclick = () => {
   link.download = "session_data.csv";
   link.click();
 }
+
 // Tambahkan event listener untuk memvalidasi ukuran peta saat jendela diubah ukurannya
 window.addEventListener('resize', () => {
     // Hanya panggil invalidateSize jika halaman 'home' sedang aktif
