@@ -48,14 +48,10 @@ async function fetchData() {
 
     const popupContent = `
       <b>Waktu:</b> ${date} ${time}<br>
-      <b>Latitude:</b> ${lat}<br>
-      <b>Longitude:</b> ${lon}<br>
       <b>CO:</b> ${data.field1}<br>
-      <b>NH3:</b> ${data.field2}<br>
       <b>NO:</b> ${data.field3}<br>
       <b>PM2.5:</b> ${data.field4}<br>
       <b>PM10:</b> ${data.field5}<br>
-      <b>Satelit:</b> ${data.field8}
     `;
 
     const marker = L.circleMarker([lat, lon], {
