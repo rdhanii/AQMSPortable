@@ -14,6 +14,57 @@ const fullSessionTbody = document.querySelector("#fullSessionTable tbody");
 // Chart instances to manage destruction and recreation
 let chartInstances = {}; // Use an object to store chart instances by ID
 
+// Define ISPU thresholds based on the provided image and common ISPU values
+// Kategori: Baik, Sedang, Tidak Sehat/Bahaya (warna biru, kuning, merah)
+const ispuThresholds = {
+    CO: { // Ambang batas CO dalam ppm, ISPU 0-35 Baik, 36-50 Sedang, >50 Tidak Sehat/Bahaya
+        baik: 10000,  // Biasanya Baik hingga 10 ppm (0-10), beberapa sumber hingga 35
+        sedang: 25000, // Sedang dari >10 hingga 25 (atau 35-50)
+        tidakSehat: 50000 // Tidak Sehat > 25 (atau >50)
+    },
+    NO: { // Ambang batas NO dalam ppb, ISPU 0-400 Baik, 401-800 Sedang, >800 Tidak Sehat/Bahaya
+        baik: 200, // Misal hingga 200 ppb
+        sedang: 400, // Misal hingga 400 ppb
+        tidakSehat: 800 // Misal > 400 ppb
+    },
+    PM25: { // Ambang batas PM2.5 dalam µg/m³, ISPU 0-15 Baik, 16-65 Sedang, >65 Tidak Sehat/Bahaya
+        baik: 35, // Baik hingga 35 µg/m³ (WHO guideline), ISPU 0-15
+        sedang: 75, // Sedang dari >35 hingga 75 µg/m³ (WHO interim target 1)
+        tidakSehat: 150 // Tidak Sehat > 75 µg/m³
+    },
+    PM10: { // Ambang batas PM10 dalam µg/m³, ISPU 0-50 Baik, 51-150 Sedang, >150 Tidak Sehat/Bahaya
+        baik: 50, // Baik hingga 50 µg/m³
+        sedang: 150, // Sedang dari >50 hingga 150 µg/m³
+        tidakSehat: 350 // Tidak Sehat > 150 µg/m³
+    }
+};
+
+// Fungsi untuk menentukan kategori dan warna berdasarkan parameter dan nilai
+function getAirQualityCategoryAndColor(parameter, value) {
+    const thresholds = ispuThresholds[parameter];
+    let category = "Tidak Diketahui";
+    let color = "#808080"; // Default grey for unknown
+
+    if (value === null || isNaN(value)) {
+        category = "Data Tidak Valid";
+        color = "#808080"; // Grey
+    } else if (value <= thresholds.baik) {
+        category = "Baik";
+        color = "blue"; // Biru
+    } else if (value <= thresholds.sedang) {
+        category = "Sedang";
+        color = "yellow"; // Kuning
+    } else if (value > thresholds.sedang && value <= thresholds.tidakSehat) { // Tambahan jika ada kategori di antara sedang dan bahaya
+        category = "Tidak Sehat";
+        color = "red"; // Merah
+    } else if (value > thresholds.tidakSehat) {
+        category = "Bahaya"; // Jika ada kategori 'Bahaya' setelah 'Tidak Sehat'
+        color = "darkred"; // Merah gelap
+    }
+    return { category, color };
+}
+
+
 // Load existing session data from sessionStorage on page load
 document.addEventListener('DOMContentLoaded', () => {
     const storedSessionData = sessionStorage.getItem("fullSessionHistory");
@@ -31,6 +82,10 @@ async function fetchData() {
     const data = await res.json();
     const lat = parseFloat(data.field6);
     const lon = parseFloat(data.field7);
+    const co = parseFloat(data.field1); // Ambil nilai CO
+    const no = parseFloat(data.field3); // Ambil nilai NO
+    const pm25 = parseFloat(data.field4); // Ambil nilai PM2.5
+    const pm10 = parseFloat(data.field5); // Ambil nilai PM10
 
     const date = data.created_at.split("T")[0];
     const time = data.created_at.split("T")[1].substring(0, 8);
@@ -39,39 +94,56 @@ async function fetchData() {
     document.getElementById("time").textContent = time;
     document.getElementById("lat").textContent = lat;
     document.getElementById("lon").textContent = lon;
-    document.getElementById("co").textContent = data.field1;
-    document.getElementById("nh3").textContent = data.field2;
-    document.getElementById("no").textContent = data.field3;
-    document.getElementById("pm25").textContent = data.field4;
-    document.getElementById("pm10").textContent = data.field5;
+    document.getElementById("co").textContent = co;
+    document.getElementById("no").textContent = no;
+    document.getElementById("pm25").textContent = pm25;
+    document.getElementById("pm10").textContent = pm10;
     document.getElementById("sat").textContent = data.field8;
+
+    // Determine air quality category and color for each parameter
+    const coQuality = getAirQualityCategoryAndColor('CO', co);
+    const noQuality = getAirQualityCategoryAndColor('NO', no);
+    const pm25Quality = getAirQualityCategoryAndColor('PM25', pm25);
+    const pm10Quality = getAirQualityCategoryAndColor('PM10', pm10);
+
+    // Untuk warna marker, kita bisa pakai kategori terburuk dari semua parameter,
+    // atau hanya dari PM2.5 (yang sering jadi patokan utama)
+    // Di sini saya akan menggunakan PM2.5 sebagai patokan warna marker.
+    // Anda bisa mengubahnya jika ada kriteria lain.
+    const markerColor = pm25Quality.color;
 
     const popupContent = `
       <b>Waktu:</b> ${date} ${time}<br>
-      <b>CO:</b> ${data.field1}<br>
-      <b>NO:</b> ${data.field3}<br>
-      <b>PM2.5:</b> ${data.field4}<br>
-      <b>PM10:</b> ${data.field5}<br>
+      <b>CO:</b> ${co} (${coQuality.category})<br>
+      <b>NO2:</b> ${no} (${noQuality.category})<br>
+      <b>PM2.5:</b> ${pm25} (${pm25Quality.category})<br>
+      <b>PM10:</b> ${pm10} (${pm10Quality.category})<br>
+      <br>
+      **Kualitas Udara Umum (berdasarkan PM2.5):** <span style="color:${markerColor}; font-weight:bold;">${pm25Quality.category}</span>
     `;
 
     const marker = L.circleMarker([lat, lon], {
       radius: 8,
-      color: 'blue',
-      fillColor: 'blue',
+      color: markerColor, // Warna border marker
+      fillColor: markerColor, // Warna isi marker
       fillOpacity: 0.8
     }).addTo(map).bindPopup(popupContent).openPopup();
 
     markers.push(marker);
     map.setView([lat, lon]);
 
-    const rowData = [date, time, lat, lon, data.field1, data.field2, data.field3, data.field4, data.field5, data.field8];
+    const rowData = [date, time, lat, lon, co, no, pm25, pm10, data.field8];
     
     // Check for duplicates before adding to sessionData
-    // A simple check by date and time is used here, refine if needed.
     if (!sessionData.find(r => r[0] === date && r[1] === time)) {
       sessionData.unshift(rowData); // Add new data to the beginning
       // Save the entire sessionData array to sessionStorage
       sessionStorage.setItem("fullSessionHistory", JSON.stringify(sessionData));
+      
+      // NEW: Jika halaman sesi sedang aktif, perbarui tabel dan grafik sesi secara otomatis
+      if (document.getElementById('session').classList.contains('active')) {
+          updateSessionTablesAndCharts();
+      }
     }
   } catch (err) {
     console.error("Data fetch error:", err);
@@ -94,21 +166,19 @@ function updateSessionTablesAndCharts() {
   const sortedSessionData = [...sessionData].reverse(); // Create a copy and reverse
 
   sortedSessionData.forEach((dataRow, index) => {
-      const date = dataRow.length > 0 ? dataRow[0] : '-';
-      const time = dataRow.length > 1 ? dataRow[1] : '-';
-      const lat = dataRow.length > 2 ? dataRow[2] : '-';
-      const lon = dataRow.length > 3 ? dataRow[3] : '-';
-      const co = dataRow.length > 4 ? dataRow[4] : '-';
-      const nh3 = dataRow.length > 5 ? dataRow[5] : '-';
-      const no = dataRow.length > 6 ? dataRow[6] : '-';
-      const pm25 = dataRow.length > 7 ? dataRow[7] : '-';
-      const pm10 = dataRow.length > 8 ? dataRow[8] : '-';
-      const satelit = dataRow.length > 9 ? dataRow[9] : '-';
+      const date = dataRow[0];
+      const time = dataRow[1];
+      const lat = dataRow[2];
+      const lon = dataRow[3];
+      const co = dataRow[4];
+      const no = dataRow[5];
+      const pm25 = dataRow[6];
+      const pm10 = dataRow[7];
+      const satelit = dataRow[8];
 
       // Populate full session table
       const mainRow = fullSessionTbody.insertRow();
-      // Use original index + 1 for numbering if you want chronological, or sessionData.length - index if you want newest first
-      const mainValues = [index + 1, date, time, lat, lon, co, nh3, no, pm25, pm10, satelit];
+      const mainValues = [index + 1, date, time, lat, lon, co, no, pm25, pm10, satelit];
       mainValues.forEach(val => {
           const cell = mainRow.insertCell();
           cell.textContent = val !== undefined ? val : "-";
@@ -257,7 +327,6 @@ document.getElementById("resetBtn").onclick = () => {
   document.getElementById("lat").textContent = "-";
   document.getElementById("lon").textContent = "-";
   document.getElementById("co").textContent = "-";
-  document.getElementById("nh3").textContent = "-";
   document.getElementById("no").textContent = "-";
   document.getElementById("pm25").textContent = "-";
   document.getElementById("pm10").textContent = "-";
@@ -288,7 +357,6 @@ document.getElementById("downloadMapBtn").onclick = () => {
         ctx.arc(pos.x, pos.y, radius, 0, 2 * Math.PI);
         ctx.strokeStyle = color;
         ctx.fillStyle = fillColor;
-        ctx.globalAlpha = fillOpacity;
         ctx.fill();
         ctx.stroke();
         ctx.globalAlpha = 1;
@@ -321,9 +389,13 @@ document.getElementById("downloadMapBtn").onclick = () => {
 };
 
 document.getElementById("downloadAllDataCsvBtn").onclick = () => {
-  const header = ["No","Tanggal","Waktu","Lat","Lon","CO","NH3","NO","PM2.5","PM10","Satelit"];
+  // NH3 removed from CSV header
+  const header = ["No","Tanggal","Waktu","Lat","Lon","CO","NO","PM2.5","PM10","Satelit"];
   const csvRows = [header.join(",")];
   sessionData.forEach((row, i) => {
+    // NH3 removed from row. The indices in rowData are shifted.
+    // rowData structure: [date, time, lat, lon, data.field1, data.field3, data.field4, data.field5, data.field8]
+    // So for CSV: [i+1, row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7], row[8]]
     csvRows.push([i+1, ...row].map(val => `"${val}"`).join(","));
   });
   const blob = new Blob([csvRows.join("\n")], { type: 'text/csv' });
