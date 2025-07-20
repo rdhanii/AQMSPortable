@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Air Quality Monitoring SPA</title>
+    
+    <link rel="stylesheet" href="style.css" />
+
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      crossorigin=""
+    />
+    
+    <script src="https://unpkg.com/leaflet-image@0.4.0/leaflet-image.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  </head>
+  <body>
+    <header>
+      <h1>AIR QUALITY MONITORING SYSTEM</h1>
+      <nav>
+        <button id="homeBtn" onclick="showPage('home')">Beranda</button>
+        <button id="sessionBtn" onclick="showPage('session')">Data Sesi</button>
+      </nav>
+    </header>
+    <div id="app">
+      <div id="home" class="page active">
+        <div id="mapContainer">
+          <div id="map"></div>
+          <img id="mapOverlayImage" src="laporan.png" alt="Overlay" />
+          <div class="tracking-buttons">
+            <button id="downloadMapBtn">Download Peta</button>
+            <button id="startBtn">Start</button>
+            <button id="stopBtn">Stop</button>
+            <button id="resetBtn">Reset</button>
+          </div>
+        </div>
+        <aside id="data-panel">
+          <h2>Data Terbaru</h2>
+          <div class="data-group">
+            <div class="data-label">Tanggal:</div>
+            <div class="data-value" id="date">-</div>
+          </div>
+          <div class="data-group">
+            <div class="data-label">Waktu:</div>
+            <div class="data-value" id="time">-</div>
+          </div>
+          <div class="data-group">
+            <div class="data-label">Latitude:</div>
+            <div class="data-value" id="lat">-</div>
+          </div>
+          <div class="data-group">
+            <div class="data-label">Longitude:</div>
+            <div class="data-value" id="lon">-</div>
+          </div>
+          <div class="data-group">
+            <div class="data-label">CO:</div>
+            <div class="data-value" id="co">-</div>
+          </div>
+          <div class="data-group">
+            <div class="data-label">NH3:</div>
+            <div class="data-value" id="nh3">-</div>
+          </div>
+          <div class="data-group">
+            <div class="data-label">NO:</div>
+            <div class="data-value" id="no">-</div>
+          </div>
+          <div class="data-group">
+            <div class="data-label">PM2.5:</div>
+            <div class="data-value" id="pm25">-</div>
+          </div>
+          <div class="data-group">
+            <div class="data-label">PM10:</div>
+            <div class="data-value" id="pm10">-</div>
+          </div>
+          <div class="data-group">
+            <div class="data-label">Satelit:</div>
+            <div class="data-value" id="sat">-</div>
+          </div>
+        </aside>
+      </div>
+
+      <div id="session" class="page">
+        <h2 style="margin-top: 1rem;">Riwayat Data Lengkap</h2>
+        <table id="fullSessionTable">
+          <thead>
+            <tr>
+              <th>No</th><th>Tanggal</th><th>Waktu</th><th>Lat</th><th>Lon</th>
+              <th>CO</th><th>NH3</th><th>NO</th><th>PM2.5</th><th>PM10</th><th>Satelit</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+
+        <button id="downloadAllDataCsvBtn">Download CSV Semua Data</button>
+
+        <hr style="width: 90%; margin: 2rem auto;">
+
+        <h2>Visualisasi Data (Tren Parameter)</h2>
+
+        <div class="charts-grid">
+            <div class="chart-container">
+              <h3>Tren PM2.5</h3>
+              <canvas id="pm25Chart"></canvas>
+            </div>
+
+            <div class="chart-container">
+              <h3>Tren PM10</h3>
+              <canvas id="pm10Chart"></canvas>
+            </div>
+
+            <div class="chart-container">
+              <h3>Tren CO</h3>
+              <canvas id="coChart"></canvas>
+            </div>
+
+            <div class="chart-container">
+              <h3>Tren NO</h3>
+              <canvas id="noChart"></canvas>
+            </div>
+        </div>
+      </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="script.js"></script>
+  </body>
+</html>
