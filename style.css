@@ -56,15 +56,21 @@ nav button:hover {
   border-radius: 8px;
   overflow: hidden;
   background: #e0e0e0;
-  min-height: 300px; /* Tinggi minimum default untuk desktop */
+  /* Properti baru untuk rasio aspek tetap */
+  height: 0;
+  padding-bottom: 75%; /* Rasio aspek 4:3 (tinggi adalah 75% dari lebar) */
+  /* min-height dihapus karena padding-bottom sekarang mengatur tinggi relatif terhadap lebar */
 }
 #map {
+  position: absolute; /* Pastikan posisi absolut di dalam kontainer relatif */
+  top: 0;
+  left: 0;
   width: 100%;
   height: 100%;
   z-index: 0;
 }
 #mapOverlayImage {
-  position: absolute;
+  position: absolute; /* Pastikan posisi absolut di dalam kontainer relatif */
   top: 0;
   left: 0;
   width: 100%;
@@ -195,18 +201,9 @@ tbody tr:hover { background-color: #eef7ff; }
   #mapContainer {
     width: 100%; /* Peta ambil lebar penuh */
     margin-bottom: 1rem; /* Tambah jarak antar peta dan panel data */
-    height: 0; /* Reset tinggi untuk trik padding-bottom */
-    padding-bottom: 75%; /* Rasio aspek 4:3 (tinggi adalah 75% dari lebar) */
-    min-height: auto; /* Mengesampingkan min-height default */
+    /* Properti rasio aspek sudah diatur secara global, tidak perlu diubah lagi di sini */
   }
-  /* Penting: #map dan #mapOverlayImage harus diatur ke posisi absolut 100% di dalam kontainer ini */
-  #map, #mapOverlayImage {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-  }
+  /* #map dan #mapOverlayImage juga sudah diatur secara global */
 
   #data-panel {
     width: 100%; /* Panel data ambil lebar penuh */
