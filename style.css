@@ -73,7 +73,6 @@ nav button:hover {
   z-index: 5;
   pointer-events: none;
   object-fit: fill; /* Diubah menjadi fill untuk memastikan gambar mengisi seluruh ruang */
-  opacity: 0.8; /* Tetap dengan transparansi */
 }
 
 .tracking-buttons {

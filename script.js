@@ -7,6 +7,7 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
 let intervalID = null;
 let markers = [];
 let sessionData = [];
+let polyline = null; // Deklarasi untuk menyimpan instance polyline
 
 // References to session page elements
 const fullSessionTbody = document.querySelector("#fullSessionTable tbody");
@@ -15,51 +16,62 @@ const fullSessionTbody = document.querySelector("#fullSessionTable tbody");
 let chartInstances = {}; // Use an object to store chart instances by ID
 
 // Define ISPU thresholds based on the provided image and common ISPU values
-// Kategori: Baik, Sedang, Tidak Sehat/Bahaya (warna biru, kuning, merah)
+// Kategori: Baik, Sedang, Tidak Sehat, Sangat Tidak Sehat, Berbahaya
 const ispuThresholds = {
-    CO: { // Ambang batas CO dalam ppm, ISPU 0-35 Baik, 36-50 Sedang, >50 Tidak Sehat/Bahaya
-        baik: 10000,  // Biasanya Baik hingga 10 ppm (0-10), beberapa sumber hingga 35
-        sedang: 25000, // Sedang dari >10 hingga 25 (atau 35-50)
-        tidakSehat: 50000 // Tidak Sehat > 25 (atau >50)
+    CO: { // dalam ppb
+        baik: 3492, // ISPU 0-50
+        sedang: 6983, // ISPU 51-100
+        tidakSehat: 13094, // ISPU 101-200
+        sangatTidakSehat: 26187, // ISPU 201-300
+        berbahaya: 39281 // ISPU >300 (nilai batas tertinggi di tabel)
     },
-    NO: { // Ambang batas NO dalam ppb, ISPU 0-400 Baik, 401-800 Sedang, >800 Tidak Sehat/Bahaya
-        baik: 200, // Misal hingga 200 ppb
-        sedang: 400, // Misal hingga 400 ppb
-        tidakSehat: 800 // Misal > 400 ppb
+    NO2: { // dalam ppb (menggunakan data.field3)
+        baik: 42.5, // ISPU 0-50
+        sedang: 106.3, // ISPU 51-100
+        tidakSehat: 600.5, // ISPU 101-200
+        sangatTidakSehat: 1201.0, // ISPU 201-300
+        berbahaya: 1594.2 // ISPU >300
     },
-    PM25: { // Ambang batas PM2.5 dalam µg/m³, ISPU 0-15 Baik, 16-65 Sedang, >65 Tidak Sehat/Bahaya
-        baik: 35, // Baik hingga 35 µg/m³ (WHO guideline), ISPU 0-15
-        sedang: 75, // Sedang dari >35 hingga 75 µg/m³ (WHO interim target 1)
-        tidakSehat: 150 // Tidak Sehat > 75 µg/m³
+    PM25: { // dalam µg/m³
+        baik: 15.5, // ISPU 0-50
+        sedang: 55.4, // ISPU 51-100
+        tidakSehat: 150.4, // ISPU 101-200
+        sangatTidakSehat: 250.4, // ISPU 201-300
+        berbahaya: 500 // ISPU >300
     },
-    PM10: { // Ambang batas PM10 dalam µg/m³, ISPU 0-50 Baik, 51-150 Sedang, >150 Tidak Sehat/Bahaya
-        baik: 50, // Baik hingga 50 µg/m³
-        sedang: 150, // Sedang dari >50 hingga 150 µg/m³
-        tidakSehat: 350 // Tidak Sehat > 150 µg/m³
+    PM10: { // dalam µg/m³
+        baik: 50, // ISPU 0-50
+        sedang: 150, // ISPU 51-100
+        tidakSehat: 350, // ISPU 101-200
+        sangatTidakSehat: 420, // ISPU 201-300
+        berbahaya: 500 // ISPU >300
     }
 };
 
 // Fungsi untuk menentukan kategori dan warna berdasarkan parameter dan nilai
 function getAirQualityCategoryAndColor(parameter, value) {
     const thresholds = ispuThresholds[parameter];
-    let category = "Tidak Diketahui";
-    let color = "#808080"; // Default grey for unknown
+    let category = "Data Tidak Valid";
+    let color = "#808080"; // Default grey for unknown or invalid data
 
     if (value === null || isNaN(value)) {
         category = "Data Tidak Valid";
         color = "#808080"; // Grey
     } else if (value <= thresholds.baik) {
-        category = "Baik";
+        category = "Baik"; // ISPU 0-50
         color = "blue"; // Biru
     } else if (value <= thresholds.sedang) {
-        category = "Sedang";
+        category = "Sedang"; // ISPU 51-100
         color = "yellow"; // Kuning
-    } else if (value > thresholds.sedang && value <= thresholds.tidakSehat) { // Tambahan jika ada kategori di antara sedang dan bahaya
-        category = "Tidak Sehat";
+    } else if (value <= thresholds.tidakSehat) {
+        category = "Tidak Sehat"; // ISPU 101-200
         color = "red"; // Merah
-    } else if (value > thresholds.tidakSehat) {
-        category = "Bahaya"; // Jika ada kategori 'Bahaya' setelah 'Tidak Sehat'
-        color = "darkred"; // Merah gelap
+    } else if (value <= thresholds.sangatTidakSehat) {
+        category = "Sangat Tidak Sehat"; // ISPU 201-300
+        color = "purple"; // Ungu
+    } else if (value > thresholds.sangatTidakSehat) { // Untuk nilai di atas kategori Sangat Tidak Sehat (ISPU > 300)
+        category = "Berbahaya"; // ISPU >300
+        color = "black"; // Hitam
     }
     return { category, color };
 }
@@ -73,17 +85,38 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     // Initialize home page display
     showPage('home');
+    updatePolyline(); // Gambar polyline saat halaman dimuat
 });
+
+// Fungsi untuk memperbarui polyline pada peta
+function updatePolyline() {
+    // Hapus polyline yang ada jika ada
+    if (polyline) {
+        map.removeLayer(polyline);
+    }
+
+    // Ekstrak koordinat dari sessionData
+    const latlngs = sessionData.map(row => [row[2], row[3]]); // [latitude, longitude]
+
+    if (latlngs.length > 1) { // Hanya gambar polyline jika ada setidaknya dua titik
+        // Gambar polyline baru
+        polyline = L.polyline(latlngs, {
+            color: 'green', // Warna garis
+            weight: 3,      // Ketebalan garis
+            opacity: 0.7    // Opasitas garis
+        }).addTo(map);
+    }
+}
 
 
 async function fetchData() {
   try {
-    const res = await fetch("https://api.thingspeak.com/channels/2991639/feeds/last.json?api_key=SWILLW22I2VRFQWJ");
+    const res = await await fetch("https://api.thingspeak.com/channels/2991639/feeds/last.json?api_key=SWILLW22I2VRFQWJ");
     const data = await res.json();
     const lat = parseFloat(data.field6);
     const lon = parseFloat(data.field7);
     const co = parseFloat(data.field1); // Ambil nilai CO
-    const no = parseFloat(data.field3); // Ambil nilai NO
+    const no = parseFloat(data.field3); // Ambil nilai NO (sekarang diinterpretasikan sebagai NO2)
     const pm25 = parseFloat(data.field4); // Ambil nilai PM2.5
     const pm10 = parseFloat(data.field5); // Ambil nilai PM10
 
@@ -102,24 +135,52 @@ async function fetchData() {
 
     // Determine air quality category and color for each parameter
     const coQuality = getAirQualityCategoryAndColor('CO', co);
-    const noQuality = getAirQualityCategoryAndColor('NO', no);
+    const no2Quality = getAirQualityCategoryAndColor('NO2', no); // Menggunakan NO2
     const pm25Quality = getAirQualityCategoryAndColor('PM25', pm25);
     const pm10Quality = getAirQualityCategoryAndColor('PM10', pm10);
 
-    // Untuk warna marker, kita bisa pakai kategori terburuk dari semua parameter,
-    // atau hanya dari PM2.5 (yang sering jadi patokan utama)
-    // Di sini saya akan menggunakan PM2.5 sebagai patokan warna marker.
-    // Anda bisa mengubahnya jika ada kriteria lain.
-    const markerColor = pm25Quality.color;
+    // Untuk warna marker, kita bisa pakai kategori terburuk dari semua parameter.
+    // Atau bisa juga mengikuti patokan utama seperti PM2.5.
+    // Di sini, saya akan menentukan warna marker berdasarkan kategori terburuk
+    // dari PM2.5, PM10, CO, dan NO2.
+    let worstCategoryColor = "blue"; // Default Baik (Biru)
+    let worstCategoryText = "Baik";
+
+    // Prioritas warna: Hitam > Ungu > Merah > Kuning > Biru
+    const categoryOrder = ["Data Tidak Valid", "Berbahaya", "Sangat Tidak Sehat", "Tidak Sehat", "Sedang", "Baik"];
+    
+    // Fungsi pembantu untuk membandingkan dan mendapatkan kategori/warna terburuk
+    function updateWorst(currentWorstCategory, newCategory, newColor) {
+        const currentWorstIndex = categoryOrder.indexOf(currentWorstCategory);
+        const newCategoryIndex = categoryOrder.indexOf(newCategory);
+
+        if (newCategoryIndex < currentWorstIndex) {
+            return { category: newCategory, color: newColor };
+        }
+        return { category: currentWorstCategory, color: currentWorstColor };
+    }
+
+    let currentWorstColor = "blue";
+    let currentWorstCategory = "Baik";
+
+    // Membandingkan kategori dari semua parameter
+    const categories = [coQuality, no2Quality, pm25Quality, pm10Quality];
+    categories.forEach(q => {
+        const updated = updateWorst(currentWorstCategory, q.category, q.color);
+        currentWorstCategory = updated.category;
+        currentWorstColor = updated.color;
+    });
+
+    const markerColor = currentWorstColor; // Warna marker berdasarkan kategori terburuk
 
     const popupContent = `
       <b>Waktu:</b> ${date} ${time}<br>
       <b>CO:</b> ${co} (${coQuality.category})<br>
-      <b>NO2:</b> ${no} (${noQuality.category})<br>
+      <b>NO2:</b> ${no} (${no2Quality.category})<br>
       <b>PM2.5:</b> ${pm25} (${pm25Quality.category})<br>
       <b>PM10:</b> ${pm10} (${pm10Quality.category})<br>
       <br>
-      **Kualitas Udara Umum (berdasarkan PM2.5):** <span style="color:${markerColor}; font-weight:bold;">${pm25Quality.category}</span>
+      <b>Kualitas Udara Umum:</b> <span style="color:${markerColor}; font-weight:bold;">${currentWorstCategory}</span>
     `;
 
     const marker = L.circleMarker([lat, lon], {
@@ -140,6 +201,9 @@ async function fetchData() {
       // Save the entire sessionData array to sessionStorage
       sessionStorage.setItem("fullSessionHistory", JSON.stringify(sessionData));
       
+      // Update polyline after new data is added
+      updatePolyline();
+
       // NEW: Jika halaman sesi sedang aktif, perbarui tabel dan grafik sesi secara otomatis
       if (document.getElementById('session').classList.contains('active')) {
           updateSessionTablesAndCharts();
@@ -171,7 +235,7 @@ function updateSessionTablesAndCharts() {
       const lat = dataRow[2];
       const lon = dataRow[3];
       const co = dataRow[4];
-      const no = dataRow[5];
+      const no = dataRow[5]; // Ini sekarang adalah NO2
       const pm25 = dataRow[6];
       const pm10 = dataRow[7];
       const satelit = dataRow[8];
@@ -205,7 +269,7 @@ function updateSessionTablesAndCharts() {
     chartInstances.pm25Chart = createLineChart('pm25Chart', 'PM2.5', pm25Values, 'rgb(255, 99, 132)', 'rgba(255, 99, 132, 0.2)', labels);
     chartInstances.pm10Chart = createLineChart('pm10Chart', 'PM10', pm10Values, 'rgb(54, 162, 235)', 'rgba(54, 162, 235, 0.2)', labels);
     chartInstances.coChart = createLineChart('coChart', 'CO', coValues, 'rgb(75, 192, 192)', 'rgba(75, 192, 192, 0.2)', labels);
-    chartInstances.noChart = createLineChart('noChart', 'NO', noValues, 'rgb(153, 102, 255)', 'rgba(153, 102, 255, 0.2)', labels);
+    chartInstances.noChart = createLineChart('noChart', 'NO2', noValues, 'rgb(153, 102, 255)', 'rgba(153, 102, 255, 0.2)', labels);
   } else {
       console.log("No historical data found in sessionStorage for charts.");
       // Optionally clear the chart canvases if no data
@@ -320,6 +384,13 @@ document.getElementById("resetBtn").onclick = () => {
   sessionData = []; // Clear local data
   sessionStorage.removeItem("fullSessionHistory"); // Clear stored data
   updateSessionTablesAndCharts(); // Clear tables and charts
+  
+  // Hapus polyline saat reset
+  if (polyline) {
+      map.removeLayer(polyline);
+      polyline = null;
+  }
+
   map.setView([-6.2, 106.8], 11); // Reset map view
   // Also clear data panel on home page if visible
   document.getElementById("date").textContent = "-";
